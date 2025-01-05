@@ -25,6 +25,8 @@
 #include <linux/uaccess.h>
 #include <asm/unistd.h>
 
+#include <lttle/trigger.h>
+
 const struct file_operations generic_ro_fops = {
 	.llseek		= generic_file_llseek,
 	.read_iter	= generic_file_read_iter,
@@ -625,6 +627,12 @@ SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
 
 ssize_t ksys_write(unsigned int fd, const char __user *buf, size_t count)
 {
+	// @TODO(laurci): this is just a temporary test
+	if (fd == 100) {
+		lttle_sys_trigger(LTTLE_SYS_WRITE, NULL);
+		return 0;
+	}
+
 	struct fd f = fdget_pos(fd);
 	ssize_t ret = -EBADF;
 

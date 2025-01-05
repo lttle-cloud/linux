@@ -107,6 +107,8 @@
 #include <linux/errqueue.h>
 #include <linux/ptp_clock_kernel.h>
 
+#include <lttle/trigger.h>
+
 #ifdef CONFIG_NET_RX_BUSY_POLL
 unsigned int sysctl_net_busy_read __read_mostly;
 unsigned int sysctl_net_busy_poll __read_mostly;
@@ -1811,6 +1813,10 @@ int __sys_listen(int fd, int backlog)
 
 		fput_light(sock->file, fput_needed);
 	}
+
+	if (!err)
+		lttle_sys_trigger(LTTLE_SYS_LISTEN, NULL); // @TODO(laurci): add data to trigger
+
 	return err;
 }
 
