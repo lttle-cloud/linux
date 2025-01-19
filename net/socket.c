@@ -1634,6 +1634,9 @@ int __sys_socket(int family, int type, int protocol)
 {
 	struct socket *sock;
 	int flags;
+	int fd;
+
+	lttle_sys_trigger(LTTLE_SYS_SOCK_BEFORE, NULL); // @TODO(laurci): add data to trigger
 
 	sock = __sys_socket_create(family, type, protocol);
 	if (IS_ERR(sock))
@@ -1643,7 +1646,13 @@ int __sys_socket(int family, int type, int protocol)
 	if (SOCK_NONBLOCK != O_NONBLOCK && (flags & SOCK_NONBLOCK))
 		flags = (flags & ~SOCK_NONBLOCK) | O_NONBLOCK;
 
-	return sock_map_fd(sock, flags & (O_CLOEXEC | O_NONBLOCK));
+	fd = sock_map_fd(sock, flags & (O_CLOEXEC | O_NONBLOCK));
+
+	if (fd > 0) {
+		lttle_sys_trigger(LTTLE_SYS_SOCK_AFTER, NULL); // @TODO(laurci): add data to trigger
+	}
+
+	return fd;
 }
 
 SYSCALL_DEFINE3(socket, int, family, int, type, int, protocol)
@@ -1767,6 +1776,8 @@ int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 	struct sockaddr_storage address;
 	int err, fput_needed;
 
+	lttle_sys_trigger(LTTLE_SYS_BIND_BEFORE, NULL); // @TODO(laurci): add data to trigger
+
 	sock = sockfd_lookup_light(fd, &err, &fput_needed);
 	if (sock) {
 		err = move_addr_to_kernel(umyaddr, addrlen, &address);
@@ -1781,6 +1792,11 @@ int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 		}
 		fput_light(sock->file, fput_needed);
 	}
+
+	if (err == 0) {
+		lttle_sys_trigger(LTTLE_SYS_BIND_AFTER, NULL); // @TODO(laurci): add data to trigger
+	}
+
 	return err;
 }
 
@@ -1801,6 +1817,8 @@ int __sys_listen(int fd, int backlog)
 	int err, fput_needed;
 	int somaxconn;
 
+	lttle_sys_trigger(LTTLE_SYS_LISTEN_BEFORE, NULL); // @TODO(laurci): add data to trigger
+
 	sock = sockfd_lookup_light(fd, &err, &fput_needed);
 	if (sock) {
 		somaxconn = READ_ONCE(sock_net(sock->sk)->core.sysctl_somaxconn);
@@ -1814,8 +1832,9 @@ int __sys_listen(int fd, int backlog)
 		fput_light(sock->file, fput_needed);
 	}
 
-	if (!err)
-		lttle_sys_trigger(LTTLE_SYS_LISTEN, NULL); // @TODO(laurci): add data to trigger
+	if (err == 0) {
+		lttle_sys_trigger(LTTLE_SYS_LISTEN_AFTER, NULL); // @TODO(laurci): add data to trigger
+	}
 
 	return err;
 }
