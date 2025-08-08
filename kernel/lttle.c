@@ -50,6 +50,18 @@ static ssize_t lttle_proc_write(struct file *file, const char __user *buf, size_
         return count;
     }
 
+    if (strcmp(tbuf, "flash_lock") == 0) {
+        lttle_sys_cmd(LTTLE_CMD_FLASH_LOCK);
+        *ppos = 0;  // Reset position for next write
+        return count;
+    }
+
+    if (strcmp(tbuf, "flash_unlock") == 0) {
+        lttle_sys_cmd(LTTLE_CMD_FLASH_UNLOCK);
+        *ppos = 0;  // Reset position for next write
+        return count;
+    }
+
     *ppos = 0;  // Reset position for next write
     return count;
 }
@@ -111,6 +123,11 @@ void lttle_sys_trigger(unsigned char code, char data[7])
 
 
     *((volatile lttle_sys_trigger_data *)mapped_mmio_base) = trigger_data;
+}
+
+void lttle_sys_cmd(unsigned char cmd)
+{
+    *((volatile unsigned char *)mapped_mmio_base + 8) = cmd;
 }
 
 subsys_initcall(lttle_subsystem_init);

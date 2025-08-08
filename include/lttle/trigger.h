@@ -7,6 +7,7 @@
 #define LTTLE_TRIGGER_MEMORY_SIZE (4096)
 
 #define LTTLE_SYS_AFTER_OFFSET 127
+#define LTTLE_SYS_CMD_OFFSET 64
 
 #define LTTLE_SYS_LISTEN_BEFORE 1
 #define LTTLE_SYS_BIND_BEFORE 2
@@ -16,8 +17,12 @@
 #define LTTLE_SYS_LISTEN_AFTER (LTTLE_SYS_LISTEN_BEFORE + LTTLE_SYS_AFTER_OFFSET)
 #define LTTLE_SYS_BIND_AFTER (LTTLE_SYS_BIND_BEFORE + LTTLE_SYS_AFTER_OFFSET)
 
+#define LTTLE_CMD_FLASH_LOCK (LTTLE_SYS_CMD_OFFSET + 0)
+#define LTTLE_CMD_FLASH_UNLOCK (LTTLE_SYS_CMD_OFFSET + 1)
+
 int __init lttle_subsystem_init(void);
 void __exit lttle_subsystem_exit(void);
 void lttle_sys_trigger(unsigned char code, char data[7]);
+void lttle_sys_cmd(unsigned char cmd);
 
 #endif // _LTTLE_TRIGGER_H
