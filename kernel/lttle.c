@@ -46,9 +46,11 @@ static ssize_t lttle_proc_write(struct file *file, const char __user *buf, size_
 
     if (strcmp(tbuf, "manual_trigger") == 0) {
         lttle_sys_trigger(LTTLE_MANUAL_TRIGGER, NULL);
+        *ppos = 0;  // Reset position for next write
         return count;
     }
 
+    *ppos = 0;  // Reset position for next write
     return count;
 }
 
