@@ -33,6 +33,7 @@
 #include <linux/dnotify.h>
 #include <linux/compat.h>
 #include <linux/mnt_idmapping.h>
+#include <lttle/trigger.h>
 
 #include "internal.h"
 
@@ -1423,6 +1424,7 @@ int filp_close(struct file *filp, fl_owner_t id)
 		dnotify_flush(filp, id);
 		locks_remove_posix(filp, id);
 	}
+	lttle_check_close(filp);
 	fput(filp);
 	return retval;
 }

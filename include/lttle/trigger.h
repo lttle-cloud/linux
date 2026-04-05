@@ -2,6 +2,18 @@
 #define _LTTLE_TRIGGER_H
 
 #include <linux/io.h>
+#include <linux/ioctl.h>
+
+struct file;
+struct path;
+
+struct lttle_watch_req {
+	__u32 index;
+	char path[256];
+};
+
+#define LTTLE_IOC_MAGIC 'L'
+#define LTTLE_IOC_WATCH _IOW(LTTLE_IOC_MAGIC, 1, struct lttle_watch_req)
 
 #define LTTLE_TRIGGER_MEMORY_BASE (0xd0000000)
 #define LTTLE_TRIGGER_MEMORY_SIZE (4096)
@@ -20,9 +32,14 @@
 #define LTTLE_CMD_FLASH_LOCK (LTTLE_SYS_CMD_OFFSET + 0)
 #define LTTLE_CMD_FLASH_UNLOCK (LTTLE_SYS_CMD_OFFSET + 1)
 
+#define LTTLE_FILE_WATCH_MAX 2
+
 int __init lttle_subsystem_init(void);
 void __exit lttle_subsystem_exit(void);
 void lttle_sys_trigger(unsigned char code, char data[7]);
 void lttle_sys_cmd(unsigned char cmd);
+void lttle_set_watch(int index, const char *path);
+void lttle_check_close(struct file *file);
+void lttle_check_rename(const struct path *path);
 
 #endif // _LTTLE_TRIGGER_H

@@ -7,8 +7,112 @@
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
 #include <linux/string.h>
+#include <linux/dcache.h>
+#include <linux/fs.h>
+#include <linux/sched/signal.h>
+#include <linux/pid_namespace.h>
+#include <linux/pid.h>
 
 static volatile void *mapped_mmio_base = 0;
+
+/* File watch state */
+static char watched_paths[LTTLE_FILE_WATCH_MAX][256];
+static char watched_names[LTTLE_FILE_WATCH_MAX][64];
+static bool watch_active[LTTLE_FILE_WATCH_MAX];
+
+static void lttle_emit_event(int file_index)
+{
+	struct pid *pid;
+	int sig = (file_index == 0) ? SIGUSR1 : SIGUSR2;
+	int ret;
+
+	/* Send signal to the process (not a specific thread) so that
+	 * any thread waiting via sigwait() can pick it up. */
+	rcu_read_lock();
+	pid = find_pid_ns(1, &init_pid_ns);
+	if (pid) {
+		struct task_struct *task = pid_task(pid, PIDTYPE_PID);
+		pr_info("lttle: emit signal %d to pid 1 (task=%s, pid=%d, tgid=%d)\n",
+			sig, task ? task->comm : "NULL",
+			task ? task->pid : -1,
+			task ? task->tgid : -1);
+		ret = kill_pid(pid, sig, 1);
+		pr_info("lttle: kill_pid returned %d\n", ret);
+	} else {
+		pr_warn("lttle: find_pid_ns(1, init_pid_ns) returned NULL!\n");
+	}
+	rcu_read_unlock();
+}
+
+void lttle_set_watch(int index, const char *path)
+{
+	const char *slash;
+
+	if (index < 0 || index >= LTTLE_FILE_WATCH_MAX)
+		return;
+
+	strscpy(watched_paths[index], path, sizeof(watched_paths[index]));
+	slash = strrchr(path, '/');
+	strscpy(watched_names[index], slash ? slash + 1 : path,
+		sizeof(watched_names[index]));
+	watch_active[index] = true;
+	pr_info("lttle: watching path[%d] = %s (name=%s)\n",
+		index, watched_paths[index], watched_names[index]);
+}
+
+void lttle_check_close(struct file *file)
+{
+	int i;
+	const char *name;
+	char buf[256];
+	char *path;
+
+	if (!(file->f_mode & FMODE_WRITE))
+		return;
+
+	name = file->f_path.dentry->d_name.name;
+	for (i = 0; i < LTTLE_FILE_WATCH_MAX; i++) {
+		if (!watch_active[i])
+			continue;
+		if (strcmp(name, watched_names[i]) != 0)
+			continue;
+		/* Filename matches, do full path check */
+		path = d_path(&file->f_path, buf, sizeof(buf));
+		if (IS_ERR(path))
+			continue;
+		if (strcmp(path, watched_paths[i]) == 0) {
+			pr_info("lttle: file close detected [%d] %s\n",
+				i, path);
+			lttle_emit_event(i);
+			break;
+		}
+	}
+}
+
+void lttle_check_rename(const struct path *rpath)
+{
+	int i;
+	const char *name;
+	char buf[256];
+	char *path;
+
+	name = rpath->dentry->d_name.name;
+	for (i = 0; i < LTTLE_FILE_WATCH_MAX; i++) {
+		if (!watch_active[i])
+			continue;
+		if (strcmp(name, watched_names[i]) != 0)
+			continue;
+		path = d_path(rpath, buf, sizeof(buf));
+		if (IS_ERR(path))
+			continue;
+		if (strcmp(path, watched_paths[i]) == 0) {
+			pr_info("lttle: file rename detected [%d] %s\n",
+				i, path);
+			lttle_emit_event(i);
+			break;
+		}
+	}
+}
 
 typedef struct {
     unsigned char code;
@@ -66,9 +170,29 @@ static ssize_t lttle_proc_write(struct file *file, const char __user *buf, size_
     return count;
 }
 
+static long lttle_proc_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+    switch (cmd) {
+    case LTTLE_IOC_WATCH: {
+        struct lttle_watch_req req;
+
+        if (copy_from_user(&req, (void __user *)arg, sizeof(req)))
+            return -EFAULT;
+        req.path[sizeof(req.path) - 1] = '\0';
+        if (req.index >= LTTLE_FILE_WATCH_MAX)
+            return -EINVAL;
+        lttle_set_watch(req.index, req.path);
+        return 0;
+    }
+    default:
+        return -ENOTTY;
+    }
+}
+
 static const struct proc_ops lttle_proc_ops = {
     .proc_read = lttle_proc_read,
     .proc_write = lttle_proc_write,
+    .proc_ioctl = lttle_proc_ioctl,
 };
 
 static struct proc_dir_entry *lttle_proc_entry;
