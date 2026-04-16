@@ -15,8 +15,9 @@ struct lttle_watch_req {
 #define LTTLE_IOC_MAGIC 'L'
 #define LTTLE_IOC_WATCH _IOW(LTTLE_IOC_MAGIC, 1, struct lttle_watch_req)
 
-#define LTTLE_TRIGGER_MEMORY_BASE (0xd0000000)
-#define LTTLE_TRIGGER_MEMORY_SIZE (4096)
+/* Triggers are sent via PIO port 0x510 (8-byte outl pairs).
+ * No MMIO mapping needed. */
+#define LTTLE_TRIGGER_PIO_PORT (0x510)
 
 #define LTTLE_SYS_AFTER_OFFSET 127
 #define LTTLE_SYS_CMD_OFFSET 64
