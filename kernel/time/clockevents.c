@@ -607,6 +607,7 @@ void clockevents_resume(void)
 		if (dev->resume && !clockevent_state_detached(dev))
 			dev->resume(dev);
 }
+EXPORT_SYMBOL_GPL(clockevents_resume);
 
 #ifdef CONFIG_HOTPLUG_CPU
 

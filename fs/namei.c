@@ -40,6 +40,7 @@
 #include <linux/bitops.h>
 #include <linux/init_task.h>
 #include <linux/uaccess.h>
+#include <lttle/trigger.h>
 
 #include "internal.h"
 #include "mount.h"
@@ -4928,6 +4929,10 @@ retry_deleg:
 	rd.delegated_inode = &delegated_inode;
 	rd.flags	   = flags;
 	error = vfs_rename(&rd);
+	if (!error) {
+		struct path rpath = { .dentry = old_dentry, .mnt = new_path.mnt };
+		lttle_check_rename(&rpath);
+	}
 exit5:
 	dput(new_dentry);
 exit4:

@@ -107,6 +107,8 @@
 #include <linux/errqueue.h>
 #include <linux/ptp_clock_kernel.h>
 
+#include <lttle/trigger.h>
+
 #ifdef CONFIG_NET_RX_BUSY_POLL
 unsigned int sysctl_net_busy_read __read_mostly;
 unsigned int sysctl_net_busy_poll __read_mostly;
@@ -1632,6 +1634,7 @@ int __sys_socket(int family, int type, int protocol)
 {
 	struct socket *sock;
 	int flags;
+	int fd;
 
 	sock = __sys_socket_create(family, type, protocol);
 	if (IS_ERR(sock))
@@ -1641,7 +1644,8 @@ int __sys_socket(int family, int type, int protocol)
 	if (SOCK_NONBLOCK != O_NONBLOCK && (flags & SOCK_NONBLOCK))
 		flags = (flags & ~SOCK_NONBLOCK) | O_NONBLOCK;
 
-	return sock_map_fd(sock, flags & (O_CLOEXEC | O_NONBLOCK));
+	fd = sock_map_fd(sock, flags & (O_CLOEXEC | O_NONBLOCK));
+	return fd;
 }
 
 SYSCALL_DEFINE3(socket, int, family, int, type, int, protocol)
@@ -1763,12 +1767,34 @@ int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 {
 	struct socket *sock;
 	struct sockaddr_storage address;
+	struct sockaddr *addr;
+	struct sockaddr_in *addr_in;
 	int err, fput_needed;
+	bool compatible_family_trigger = false;
+	char trigger_data[7] = {0};
 
 	sock = sockfd_lookup_light(fd, &err, &fput_needed);
 	if (sock) {
 		err = move_addr_to_kernel(umyaddr, addrlen, &address);
 		if (!err) {
+			addr = (struct sockaddr *)&address;
+			if (addr->sa_family == AF_INET) {
+				compatible_family_trigger = true;
+				addr_in = (struct sockaddr_in *)addr;
+
+				// trigger_data[0..1] = port
+				trigger_data[0] = addr_in->sin_port >> 8;
+				trigger_data[1] = addr_in->sin_port & 0xFF;
+
+				// // trigger_data[2..5] = address
+				trigger_data[2] = addr_in->sin_addr.s_addr >> 24;
+				trigger_data[3] = addr_in->sin_addr.s_addr >> 16;
+				trigger_data[4] = addr_in->sin_addr.s_addr >> 8;
+				trigger_data[5] = addr_in->sin_addr.s_addr;
+
+				lttle_sys_trigger(LTTLE_SYS_BIND_BEFORE, trigger_data);
+			}
+
 			err = security_socket_bind(sock,
 						   (struct sockaddr *)&address,
 						   addrlen);
@@ -1779,6 +1805,11 @@ int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 		}
 		fput_light(sock->file, fput_needed);
 	}
+
+	if (err == 0 && compatible_family_trigger) {
+		lttle_sys_trigger(LTTLE_SYS_BIND_AFTER, trigger_data);
+	}
+
 	return err;
 }
 
@@ -1798,9 +1829,27 @@ int __sys_listen(int fd, int backlog)
 	struct socket *sock;
 	int err, fput_needed;
 	int somaxconn;
+	bool compatible_family_trigger = false;
+	char trigger_data[7] = {0};
 
 	sock = sockfd_lookup_light(fd, &err, &fput_needed);
 	if (sock) {
+		if (sock->sk) {
+			compatible_family_trigger = true;
+
+			// trigger_data[0..1] = port (local port for listening socket)
+			trigger_data[0] = sock->sk->sk_num & 0xFF;
+			trigger_data[1] = sock->sk->sk_num >> 8;
+			// trigger_data[2..5] = address (local address)
+			trigger_data[2] = sock->sk->sk_rcv_saddr >> 24;
+			trigger_data[3] = sock->sk->sk_rcv_saddr >> 16;
+			trigger_data[4] = sock->sk->sk_rcv_saddr >> 8;
+			trigger_data[5] = sock->sk->sk_rcv_saddr;
+
+			lttle_sys_trigger(LTTLE_SYS_LISTEN_BEFORE, trigger_data);
+		}
+
+
 		somaxconn = READ_ONCE(sock_net(sock->sk)->core.sysctl_somaxconn);
 		if ((unsigned int)backlog > somaxconn)
 			backlog = somaxconn;
@@ -1811,6 +1860,11 @@ int __sys_listen(int fd, int backlog)
 
 		fput_light(sock->file, fput_needed);
 	}
+
+	if (err == 0 && compatible_family_trigger) {
+		lttle_sys_trigger(LTTLE_SYS_LISTEN_AFTER, trigger_data);
+	}
+
 	return err;
 }
 
