@@ -33,7 +33,7 @@ struct lttle_watch_req {
 #define LTTLE_CMD_FLASH_LOCK (LTTLE_SYS_CMD_OFFSET + 0)
 #define LTTLE_CMD_FLASH_UNLOCK (LTTLE_SYS_CMD_OFFSET + 1)
 
-#define LTTLE_FILE_WATCH_MAX 2
+#define LTTLE_FILE_WATCH_MAX 10
 
 int __init lttle_subsystem_init(void);
 void __exit lttle_subsystem_exit(void);
