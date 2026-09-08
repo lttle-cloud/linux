@@ -170,7 +170,7 @@ static bool watch_active[LTTLE_FILE_WATCH_MAX];
 static void lttle_emit_event(int file_index)
 {
 	struct pid *pid;
-	int sig = (file_index == 0) ? SIGUSR1 : SIGUSR2;
+	int sig = (file_index == 0) ? SIGUSR1 : (file_index == 1) ? SIGUSR2 : (SIGRTMIN + file_index);
 	int ret;
 
 	/* Send signal to the process (not a specific thread) so that
