@@ -167,10 +167,25 @@ static char watched_paths[LTTLE_FILE_WATCH_MAX][256];
 static char watched_names[LTTLE_FILE_WATCH_MAX][64];
 static bool watch_active[LTTLE_FILE_WATCH_MAX];
 
+/*
+ * Offset added to SIGRTMIN for watch indices >= 2. Signals 32-34
+ * (kernel-raw SIGRTMIN..+2) are reserved by musl's own runtime for its
+ * internal use (confirmed empirically 2026-09-09: a musl/Rust process
+ * that blocks signal 34 via pthread_sigmask and creates a signalfd for
+ * it still gets killed by the signal's default action when it arrives —
+ * musl silently doesn't honor the block for its own reserved range).
+ * +16 clears that range with margin, and also clears signal 42
+ * (SIGRTMIN+10), already used by the fork-resume NMI handler in this
+ * same file. Takeoff's signal_for_watch_index() must use the identical
+ * offset — see BOX-246.
+ */
+#define LTTLE_WATCH_SIGNAL_OFFSET 16
+
 static void lttle_emit_event(int file_index)
 {
 	struct pid *pid;
-	int sig = (file_index == 0) ? SIGUSR1 : (file_index == 1) ? SIGUSR2 : (SIGRTMIN + file_index);
+	int sig = (file_index == 0) ? SIGUSR1 : (file_index == 1) ? SIGUSR2 :
+		(SIGRTMIN + LTTLE_WATCH_SIGNAL_OFFSET + file_index);
 	int ret;
 
 	/* Send signal to the process (not a specific thread) so that
